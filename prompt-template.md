@@ -1,4 +1,4 @@
-# Prompt Template — Test Plan from a Jira Ticket
+# Prompt Template — Test Plan playwright MVC
 
 ## Role
 
@@ -6,11 +6,15 @@ You are a senior QA engineer reviewing the feature described below.
 
 ## Task
 
-Create a detailed test plan for the [FEATURE NAME] feature.
+Create a detailed test plan for TODO MVC application.
 
 ## Acceptance Criteria
 
-[Paste from Jira]
+All features should be covered:
+1. Create a todo list 
+2. Add items (4)
+3. Finish item. Expect to be finished
+4. Remove item from the list. Expect to be removed
 
 ## Requirements for the test plan
 
@@ -32,3 +36,4 @@ Create a detailed test plan for the [FEATURE NAME] feature.
 - Structured test plan in Markdown
 - Use real field names and values, not placeholders
 - At the end: list any ambiguities or gaps in the ACs
+- Revalidate output against the Acceptance Criterias

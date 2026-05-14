@@ -1,6 +1,15 @@
+import { config } from 'dotenv';
 import { defineConfig, devices } from '@playwright/test';
 
+// Load `.env` from the project working directory (package root when using npm scripts).
+config();
+
 export default defineConfig({
+  env: {
+    DIDAXIS_URL: process.env.DIDAXIS_URL ?? '',
+    DIDAXIS_EMAIL: process.env.DIDAXIS_EMAIL ?? '',
+    DIDAXIS_PASSWORD: process.env.DIDAXIS_PASSWORD ?? '',
+  },
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -8,7 +17,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'https://demo.playwright.dev/todomvc/',
+    baseURL: process.env.DIDAXIS_URL,
     trace: 'on-first-retry',
   },
   projects: [
