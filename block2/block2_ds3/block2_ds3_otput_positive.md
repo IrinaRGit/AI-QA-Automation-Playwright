@@ -56,10 +56,24 @@
   - No duplicate-name error is shown.
 - **Priority**: Medium
 
+### TC-004
+- **Title**: Single-character program name is accepted (minimum valid length)
+- **Preconditions**:
+  - I am on the **Program creation** form.
+- **Steps**:
+  1. In **Name**, enter \A\ (one character).
+  2. Leave **Description** empty.
+  3. Click **Create**.
+- **Expected result**:
+  - The **Create** button is enabled as soon as the single character is typed.
+  - The program is created successfully.
+  - The Programs list shows a program named \A\.
+- **Priority**: Medium
+
 ---
 
 ## Ambiguities / gaps in the ACs (to confirm)
-- **Field requirements**: ACs say “fill other required fields” but don’t list which fields are required besides **Name**.
-- **Trim rules**: Not specified whether trimming is only leading/trailing whitespace or also collapses multiple internal spaces.
+- **Field requirements**: Confirmed via Confluence Field Definitions — only **Name** is required. Description, Total Hours, Default Session Hours, Default Exam Hours, Target Audience, Focus Areas, and Sync/Async Ratio are all optional.
+- **Trim rules**: Confluence confirms leading/trailing whitespace is trimmed on submit. Collapsing of internal multiple spaces is not specified.
 - **Allowed characters**: Special characters example is provided, but the full allowed set (e.g., apostrophes, slashes, emojis) is unspecified.
-- **Uniqueness rules**: Not specified whether uniqueness is case-insensitive, whitespace-normalized, and/or accent-insensitive.
+- **Uniqueness rules**: Confirmed via Confluence — Name must be unique **per organization**. Case-sensitivity and whitespace-normalization for duplicate checks are not specified.
