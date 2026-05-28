@@ -9,6 +9,7 @@ export default defineConfig({
     DIDAXIS_URL: process.env.DIDAXIS_URL ?? '',
     DIDAXIS_EMAIL: process.env.DIDAXIS_EMAIL ?? '',
     DIDAXIS_PASSWORD: process.env.DIDAXIS_PASSWORD ?? '',
+    DIDAXIS_API_TOKEN: process.env.DIDAXIS_API_TOKEN ?? '',
   },
   testDir: './tests',
   testMatch: ['**/*.spec.ts', '**/*.ts'],
