@@ -1,11 +1,6 @@
 import { expect, test, waitForCreatedProgramId } from '../../fixtures/cleanup.fixture';
-import {
-  createButton,
-  createProgram,
-  openNewProgramModal,
-  programNameField,
-  programRow,
-} from '../../fixtures/ds1-program.helpers';
+import { escapeRegExp } from '../../pages/programs.constants';
+import { ProgramsPage } from '../../pages/programs.page';
 
 const CAFE_NFC = 'Caf\u00e9 Studies';
 const CAFE_NFD = 'Cafe\u0301 Studies';
@@ -19,7 +14,7 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await page.goto('/programs');
+    await new ProgramsPage(page).goto();
   });
 
   test('TC-012: Program name with leading and trailing whitespace is trimmed before save', async ({
@@ -28,49 +23,53 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
   }) => {
     const trimmedName = `Trimmed Program ${Date.now()}`;
     const nameWithSpaces = `  ${trimmedName}  `;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(nameWithSpaces);
+    await programs.openNewProgram();
+    await modal.fillProgramName(nameWithSpaces);
 
     const idPromise = waitForCreatedProgramId(page);
-    await createButton(dialog).click();
+    await modal.clickCreate();
     trackProgram(await idPromise);
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(programRow(page, trimmedName).first()).toBeVisible({ timeout: 15_000 });
-    await expect(programRow(page, nameWithSpaces)).toHaveCount(0);
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(trimmedName).first()).toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(nameWithSpaces)).toHaveCount(0);
   });
 
   test('TC-013: Program name consisting only of whitespace is rejected', async ({ page }) => {
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill('     ');
-    await programNameField(dialog).blur();
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const createDisabled = !(await createButton(dialog).isEnabled());
-    const validationVisible = await dialog
-      .getByText(/required|must not be empty|cannot be blank/i)
-      .isVisible()
-      .catch(() => false);
+    await programs.openNewProgram();
+    await modal.fillProgramName('     ');
+    await modal.blurProgramName();
+
+    const createDisabled = !(await modal.createButton.isEnabled());
+    const validationVisible = await modal.requiredError.isVisible().catch(() => false);
 
     expect(
       createDisabled || validationVisible,
       'Whitespace-only name must be rejected (disabled Create or validation error)',
     ).toBeTruthy();
-    await expect(dialog).toBeVisible();
+    await expect(modal.dialog).toBeVisible();
   });
 
   test('TC-014: Program name with special characters is accepted', async ({ page, trackProgram }) => {
     const name = `Math & Science: K–12 (2026) ${Date.now()}`;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(name);
+    await programs.openNewProgram();
+    await modal.fillProgramName(name);
 
     const idPromise = waitForCreatedProgramId(page);
-    await createButton(dialog).click();
+    await modal.clickCreate();
     trackProgram(await idPromise);
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(programRow(page, name).first()).toBeVisible({ timeout: 15_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(name).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test('TC-015: Identical NFC and NFD Unicode names are treated as duplicates', async ({
@@ -78,18 +77,24 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
     trackProgram,
   }) => {
     const existingName = `${CAFE_NFC} ${Date.now()}`;
-    await createProgram(page, trackProgram, existingName);
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
+    await programs.openNewProgram();
+    await modal.fillProgramName(existingName);
+    const idPromise = waitForCreatedProgramId(page);
+    await modal.clickCreate();
+    trackProgram(await idPromise);
+    await expect(programs.programRow(existingName).first()).toBeVisible({ timeout: 30_000 });
+
+    await programs.openNewProgram();
     const nfdVariant = existingName.replace(CAFE_NFC, CAFE_NFD);
-    await programNameField(dialog).fill(nfdVariant);
-    await createButton(dialog).click();
+    await modal.fillProgramName(nfdVariant);
+    await modal.clickCreate();
 
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByText(/already exists|duplicate|name.*taken/i),
-    ).toBeVisible();
-    await expect(programRow(page, existingName)).toHaveCount(1);
+    await expect(modal.dialog).toBeVisible();
+    await expect(modal.duplicateError).toBeVisible();
+    await expect(programs.programRow(existingName)).toHaveCount(1);
   });
 
   test('TC-016: Double-clicking Create does not submit the form twice', async ({
@@ -97,17 +102,18 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
     trackProgram,
   }) => {
     const name = `Double-Click Safe Program ${Date.now()}`;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(name);
+    await programs.openNewProgram();
+    await modal.fillProgramName(name);
 
-    const create = createButton(dialog);
     const idPromise = waitForCreatedProgramId(page);
-    await create.dblclick();
+    await modal.doubleClickCreate();
     trackProgram(await idPromise);
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(programRow(page, name)).toHaveCount(1);
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(name)).toHaveCount(1);
   });
 
   test('TC-017: Program appears in the list immediately after creation without page reload', async ({
@@ -115,18 +121,20 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
     trackProgram,
   }) => {
     const name = `Instant Visibility Program ${Date.now()}`;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(name);
+    await programs.openNewProgram();
+    await modal.fillProgramName(name);
 
     const start = Date.now();
     const idPromise = waitForCreatedProgramId(page);
-    await createButton(dialog).click();
+    await modal.clickCreate();
     trackProgram(await idPromise);
-    await expect(dialog).not.toBeVisible({ timeout: 2_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 2_000 });
     expect(Date.now() - start).toBeLessThan(2_000);
 
-    await expect(programRow(page, name).first()).toBeVisible({ timeout: 2_000 });
+    await expect(programs.programRow(name).first()).toBeVisible({ timeout: 2_000 });
     await expect(page).toHaveURL(/\/programs/);
   });
 
@@ -135,20 +143,22 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
     trackProgram,
   }) => {
     const name = `Unique Row Program ${Date.now()}`;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(name);
+    await programs.openNewProgram();
+    await modal.fillProgramName(name);
 
     const idPromise = waitForCreatedProgramId(page);
-    await createButton(dialog).click();
+    await modal.clickCreate();
     trackProgram(await idPromise);
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
 
-    const matchingRows = programRow(page, name);
+    const matchingRows = programs.programRow(name);
     await expect(matchingRows).toHaveCount(1);
 
     const row = matchingRows.first();
-    await expect(row).toHaveAccessibleName(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    await expect(row).toHaveAccessibleName(new RegExp(escapeRegExp(name)));
   });
 });

@@ -1,59 +1,17 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { AUTH_STORAGE_PATH } from '../../fixtures/auth.constants';
-
-const BASE_PROGRAM_NAME = 'Web Development 2026';
-const BASE_PROGRAM_DESC =
-  'Full-stack curriculum covering HTML, CSS, JavaScript, React, Node.js, testing, and deployment.';
-
-// ── Locator helpers ────────────────────────────────────────────────────────────
-
-function newProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'New Program' });
-}
-
-function editProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: /Edit Program/i });
-}
-
-function programNameField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Program Name' });
-}
-
-function programDescriptionField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Description' });
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ── Data helpers ───────────────────────────────────────────────────────────────
+import { BASE_PROGRAM_DESC, BASE_PROGRAM_NAME } from '../../pages/programs.constants';
+import { ProgramsPage } from '../../pages/programs.page';
 
 async function createUniqueProgram(page: Page): Promise<string> {
   const name = `${BASE_PROGRAM_NAME} ${Date.now()}`;
+  const programs = new ProgramsPage(page);
 
-  await page.getByRole('button', { name: '+ New Program' }).click();
-  const dialog = newProgramDialog(page);
-  await dialog.getByRole('textbox', { name: 'Program Name' }).fill(name);
-  await dialog.getByRole('textbox', { name: 'Description' }).fill(BASE_PROGRAM_DESC);
-  await dialog.getByRole('button', { name: 'Create' }).click();
-
-  await expect(
-    page.getByRole('row', { name: new RegExp(escapeRegExp(name)) }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  await programs.createProgram(name, BASE_PROGRAM_DESC);
+  await expect(programs.programRow(name).first()).toBeVisible({ timeout: 30_000 });
 
   return name;
 }
-
-async function openEditModal(page: Page, programName: string): Promise<Locator> {
-  const row = page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first();
-  await row.getByRole('button', { name: '✏️' }).click();
-  const dialog = editProgramDialog(page);
-  await expect(dialog).toBeVisible({ timeout: 10_000 });
-  return dialog;
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
   test.setTimeout(60_000);
@@ -64,68 +22,61 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await page.goto('/programs');
+    await new ProgramsPage(page).goto();
   });
 
   test('TC-011: Save is blocked when Name is empty (required field validation)', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill('');
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName('');
+    await modal.clickSave();
 
-    // Modal must stay open
-    await expect(dialog).toBeVisible();
-    // Inline validation message must be visible
-    await expect(dialog.getByText(/required|must not be empty|cannot be blank/i)).toBeVisible();
-    // List must be unchanged
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
+    await expect(modal.dialog).toBeVisible();
+    await expect(modal.requiredError).toBeVisible();
+    await expect(programs.programRow(programName).first()).toBeVisible();
   });
 
   test('TC-012: Save is blocked when Name contains only whitespace', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill('     ');
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName('     ');
+    await modal.clickSave();
 
-    // Whitespace-only value must be treated as invalid — modal stays open
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/required|must not be empty|cannot be blank/i)).toBeVisible();
-    // No update to the list
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
+    await expect(modal.dialog).toBeVisible();
+    await expect(modal.requiredError).toBeVisible();
+    await expect(programs.programRow(programName).first()).toBeVisible();
   });
 
   test('TC-013: Duplicate Name is rejected with a user-friendly error', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const firstProgram = await createUniqueProgram(page);
-    // Small gap to guarantee distinct timestamps
     await page.waitForTimeout(20);
     const secondProgram = await createUniqueProgram(page);
 
-    const dialog = await openEditModal(page, secondProgram);
-    await programNameField(dialog).fill(firstProgram);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(secondProgram);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(firstProgram);
+    await modal.clickSave();
 
-    // Modal must stay open with a conflict/duplicate error
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByText(/already exists|duplicate|name.*taken/i),
-    ).toBeVisible();
-    // Second program's row must be unchanged in the list
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(secondProgram)) }).first(),
-    ).toBeVisible();
+    await expect(modal.dialog).toBeVisible();
+    await expect(modal.duplicateError).toBeVisible();
+    await expect(programs.programRow(secondProgram).first()).toBeVisible();
   });
 
   test('TC-014: Server error on save does not close the modal or corrupt data', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const updatedName = `${programName} - Updated`;
 
-    // Force a 500 on the save (PUT/PATCH) request only
     await page.route('**/programs/**', async (route) => {
       const method = route.request().method();
       if (method === 'PUT' || method === 'PATCH') {
@@ -139,27 +90,22 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
       }
     });
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(updatedName);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(updatedName);
+    await modal.clickSave();
 
-    // Modal must remain open (or reopen) with a user-facing error
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
-    await expect(dialog.getByText(/could not save|error|failed|try again/i)).toBeVisible();
-
-    // Programmatic state must not have changed in the list
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(updatedName)) }),
-    ).toHaveCount(0);
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(modal.saveError).toBeVisible();
+    await expect(programs.programRow(programName).first()).toBeVisible();
+    await expect(programs.programRow(updatedName)).toHaveCount(0);
   });
 
   test('TC-015: Network interruption during save does not show a false success', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
 
-    // Abort the save (PUT/PATCH) request to simulate a network drop
     await page.route('**/programs/**', async (route) => {
       const method = route.request().method();
       if (method === 'PUT' || method === 'PATCH') {
@@ -169,36 +115,24 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
       }
     });
 
-    const dialog = await openEditModal(page, programName);
-    await programDescriptionField(dialog).fill('Updated description while offline.');
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillDescription('Updated description while offline.');
+    await modal.clickSave();
 
-    // Modal must NOT close on a network failure
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
-    // A network/offline error must be shown
-    await expect(
-      dialog.getByText(/network|offline|connection|could not save|failed/i),
-    ).toBeVisible();
-    // List must be unchanged
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(modal.networkError()).toBeVisible();
+    await expect(programs.programRow(programName).first()).toBeVisible();
   });
 
-  // TC-016 requires a separate non-admin account.
-  // Set DIDAXIS_UNAUTH_EMAIL and DIDAXIS_UNAUTH_PASSWORD in .env and remove skip to enable.
   test.skip('TC-016: Unauthorized user cannot save edits', async () => {
     // Precondition: DIDAXIS_UNAUTH_EMAIL / DIDAXIS_UNAUTH_PASSWORD must exist in .env
-    // Steps:
-    //   1. Login as the unauthorized user.
-    //   2. Navigate to /programs.
-    //   3. Assert the ✏️ edit button is not visible, OR attempt to open it.
-    //   4. If modal opens, change Name and click Save.
-    //   5. Assert save is rejected (403 / permission error shown) and modal does not close as success.
   });
 
-  test('TC-017: Concurrent modification is handled without silently overwriting the other session', async ({ browser }) => {
-    // Each session gets its own isolated browser context
+  test('TC-017: Concurrent modification is handled without silently overwriting the other session', async ({
+    browser,
+  }) => {
     const context1 = await browser.newContext({
       baseURL: process.env.DIDAXIS_URL,
       storageState: AUTH_STORAGE_PATH,
@@ -211,41 +145,36 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
     const page2 = await context2.newPage();
 
     try {
-      await page1.goto('/programs');
+      const programs1 = new ProgramsPage(page1);
+      await programs1.goto();
       const programName = await createUniqueProgram(page1);
 
-      // Session 1: open the edit modal and prepare a description change (do not save yet)
-      const dialog1 = await openEditModal(page1, programName);
-      await programDescriptionField(dialog1).fill('Local edit after concurrent update.');
+      await programs1.openEditFor(programName);
+      const modal1 = programs1.editProgramModal;
+      await expect(modal1.dialog).toBeVisible({ timeout: 10_000 });
+      await modal1.fillDescription('Local edit after concurrent update.');
 
-      // Session 2: update the same program's name first
-      await page2.goto('/programs');
-      const dialog2 = await openEditModal(page2, programName);
+      const programs2 = new ProgramsPage(page2);
+      await programs2.goto();
+      await programs2.openEditFor(programName);
+      const modal2 = programs2.editProgramModal;
+      await expect(modal2.dialog).toBeVisible({ timeout: 10_000 });
       const concurrentName = `${programName} - Updated by Admin`;
-      await programNameField(dialog2).fill(concurrentName);
-      await dialog2.getByRole('button', { name: 'Save' }).click();
-      await expect(dialog2).not.toBeVisible({ timeout: 15_000 });
+      await modal2.fillProgramName(concurrentName);
+      await modal2.clickSave();
+      await expect(modal2.dialog).not.toBeVisible({ timeout: 15_000 });
 
-      // Session 1: now click Save — this edit is stale
-      await dialog1.getByRole('button', { name: 'Save' }).click();
+      await modal1.clickSave();
 
-      // Acceptable outcomes: conflict message shown, OR the modal closes
-      // (last-write-wins) — but the final state must be predictable and consistent.
-      const conflictShown = await dialog1
-        .getByText(/updated by someone else|conflict|stale|refresh/i)
-        .isVisible()
-        .catch(() => false);
-      const modalClosed = await dialog1.isHidden().catch(() => false);
+      const conflictShown = await modal1.conflictError.isVisible().catch(() => false);
+      const modalClosed = await modal1.dialog.isHidden().catch(() => false);
 
       expect(
         conflictShown || modalClosed,
         'Expected either a conflict notice or the modal to close cleanly (last-write-wins)',
       ).toBeTruthy();
 
-      // Regardless of policy, both old and concurrent name must not coexist as separate rows
-      const oldNameCount = await page1
-        .getByRole('row', { name: new RegExp(escapeRegExp(programName)) })
-        .count();
+      const oldNameCount = await programs1.programRow(programName).count();
       expect(oldNameCount).toBeLessThanOrEqual(1);
     } finally {
       await context1.close();
@@ -254,22 +183,18 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
   });
 
   test('TC-018: Save updates the existing record without creating a duplicate row', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const updatedName = `${programName} - Updated`;
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(updatedName);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(updatedName);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-
-    // Exactly one row for the updated name — no duplicate
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(updatedName)) }),
-    ).toHaveCount(1);
-    // Original name row must be gone
-    await expect(
-      page.getByRole('row', { name: new RegExp(`^${escapeRegExp(programName)}$`) }),
-    ).toHaveCount(0);
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(updatedName)).toHaveCount(1);
+    await expect(programs.programRowExact(programName)).toHaveCount(0);
   });
 });

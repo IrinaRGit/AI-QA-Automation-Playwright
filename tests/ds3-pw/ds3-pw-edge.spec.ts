@@ -1,50 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-
-const BASE_PROGRAM_NAME = 'Web Development 2026';
-const BASE_PROGRAM_DESC =
-  'Full-stack curriculum covering HTML, CSS, JavaScript, React, Node.js, testing, and deployment.';
-
-// Update if the product documents a different limit; used as the assumed max for Name.
-const ASSUMED_MAX_LENGTH = 255;
-
-// ── Locator helpers ────────────────────────────────────────────────────────────
-
-function newProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'New Program' });
-}
-
-function programNameField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Program Name' });
-}
-
-function programDescriptionField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Description' });
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ── Data helpers ───────────────────────────────────────────────────────────────
-
-async function ensureBaseProgramExists(page: Page) {
-  const row = page
-    .getByRole('row', { name: new RegExp(escapeRegExp(BASE_PROGRAM_NAME)) })
-    .first();
-  if ((await row.count()) > 0 && (await row.isVisible())) return;
-
-  await page.getByRole('button', { name: '+ New Program' }).click();
-  const dialog = newProgramDialog(page);
-  await programNameField(dialog).fill(BASE_PROGRAM_NAME);
-  await programDescriptionField(dialog).fill(BASE_PROGRAM_DESC);
-  await dialog.getByRole('button', { name: 'Create' }).click();
-
-  await expect(
-    page.getByRole('row', { name: new RegExp(escapeRegExp(BASE_PROGRAM_NAME)) }).first(),
-  ).toBeVisible({ timeout: 30_000 });
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
+import { expect, test } from '@playwright/test';
+import { ASSUMED_MAX_LENGTH, BASE_PROGRAM_DESC, BASE_PROGRAM_NAME } from '../../pages/programs.constants';
+import { ProgramsPage } from '../../pages/programs.page';
 
 test.describe('DS-3 — Program name validation and duplicate prevention (Edge cases)', () => {
   test.setTimeout(60_000);
@@ -55,7 +11,7 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await page.goto('/programs');
+    await new ProgramsPage(page).goto();
   });
 
   test(
@@ -63,19 +19,16 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
     async ({ page }) => {
       const name = `Informatique & IA - Niveau 2 ${Date.now()}`;
       const description = "Vérifier l'encodage Unicode et l'affichage des caractères accentués.";
+      const programs = new ProgramsPage(page);
+      const modal = programs.newProgramModal;
 
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog = newProgramDialog(page);
-      await programNameField(dialog).fill(name);
-      await programDescriptionField(dialog).fill(description);
-      await dialog.getByRole('button', { name: 'Create' }).click();
+      await programs.openNewProgram();
+      await modal.fillProgramName(name);
+      await modal.fillDescription(description);
+      await modal.clickCreate();
 
-      await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-
-      // Accented characters must be preserved — no replacement characters (e.g. ?) in the list
-      await expect(
-        page.getByRole('row', { name: new RegExp(escapeRegExp(name)) }).first(),
-      ).toBeVisible({ timeout: 15_000 });
+      await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(programs.programRow(name).first()).toBeVisible({ timeout: 15_000 });
     },
   );
 
@@ -83,19 +36,16 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
     'TC-011: Name supports non-Latin characters (Unicode)',
     async ({ page }) => {
       const name = `データサイエンス 2026 ${Date.now()}`;
+      const programs = new ProgramsPage(page);
+      const modal = programs.newProgramModal;
 
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog = newProgramDialog(page);
-      await programNameField(dialog).fill(name);
-      await programDescriptionField(dialog).fill('Unicode name test.');
-      await dialog.getByRole('button', { name: 'Create' }).click();
+      await programs.openNewProgram();
+      await modal.fillProgramName(name);
+      await modal.fillDescription('Unicode name test.');
+      await modal.clickCreate();
 
-      await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-
-      // Non-Latin script must render correctly — no corruption or truncation
-      await expect(
-        page.getByRole('row', { name: new RegExp(escapeRegExp(name)) }).first(),
-      ).toBeVisible({ timeout: 15_000 });
+      await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(programs.programRow(name).first()).toBeVisible({ timeout: 15_000 });
     },
   );
 
@@ -103,24 +53,19 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
     'TC-012: Name max-length boundary — exactly max allowed characters succeeds without silent truncation',
     async ({ page }) => {
       const atMaxName = 'A'.repeat(ASSUMED_MAX_LENGTH);
+      const programs = new ProgramsPage(page);
+      const modal = programs.newProgramModal;
 
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog = newProgramDialog(page);
-      await programNameField(dialog).fill(atMaxName);
-      await dialog.getByRole('button', { name: 'Create' }).click();
+      await programs.openNewProgram();
+      await modal.fillProgramName(atMaxName);
+      await modal.clickCreate();
 
-      const saveSucceeded = await dialog.isHidden({ timeout: 15_000 }).catch(() => false);
+      const saveSucceeded = await modal.dialog.isHidden({ timeout: 15_000 }).catch(() => false);
 
       if (saveSucceeded) {
-        // Program must appear in the list with the full name — no silent truncation
-        await expect(
-          page.getByRole('row', { name: new RegExp(escapeRegExp(atMaxName)) }).first(),
-        ).toBeVisible({ timeout: 15_000 });
+        await expect(programs.programRow(atMaxName).first()).toBeVisible({ timeout: 15_000 });
       } else {
-        // ASSUMED_MAX_LENGTH exceeds the actual limit: a clear validation message must appear
-        await expect(
-          dialog.getByText(/max|maximum|too long|limit|characters/i),
-        ).toBeVisible();
+        await expect(modal.maxLengthError).toBeVisible();
       }
     },
   );
@@ -129,23 +74,20 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
     'TC-013: Name max-length overflow is blocked — max+1 characters are rejected',
     async ({ page }) => {
       const overMaxName = 'A'.repeat(ASSUMED_MAX_LENGTH + 1);
+      const programs = new ProgramsPage(page);
+      const modal = programs.newProgramModal;
 
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog = newProgramDialog(page);
-      await programNameField(dialog).fill(overMaxName);
+      await programs.openNewProgram();
+      await modal.fillProgramName(overMaxName);
 
-      const inputValue = await programNameField(dialog).inputValue();
+      const inputValue = await modal.programNameInput.inputValue();
 
       if (inputValue.length <= ASSUMED_MAX_LENGTH) {
-        // Field hard-caps at the max — the UI already enforces the limit before submission
         expect(inputValue.length).toBeLessThanOrEqual(ASSUMED_MAX_LENGTH);
       } else {
-        // Field allowed the overflow — submitting must produce a validation error
-        await dialog.getByRole('button', { name: 'Create' }).click();
-        await expect(dialog).toBeVisible();
-        await expect(
-          dialog.getByText(/max|maximum|too long|limit|characters/i),
-        ).toBeVisible();
+        await modal.clickCreate();
+        await expect(modal.dialog).toBeVisible();
+        await expect(modal.maxLengthError).toBeVisible();
       }
     },
   );
@@ -156,39 +98,31 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
       const baseName = `Informatique & IA - Niveau 2 ${Date.now()}`;
       const nfcName = baseName.normalize('NFC');
       const nfdName = baseName.normalize('NFD');
+      const programs = new ProgramsPage(page);
 
-      // Create the first program with the NFC-normalized form
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog1 = newProgramDialog(page);
-      await programNameField(dialog1).fill(nfcName);
-      await programDescriptionField(dialog1).fill('NFC normalization form');
-      await dialog1.getByRole('button', { name: 'Create' }).click();
-      await expect(dialog1).not.toBeVisible({ timeout: 15_000 });
+      await programs.openNewProgram();
+      const modal1 = programs.newProgramModal;
+      await modal1.fillProgramName(nfcName);
+      await modal1.fillDescription('NFC normalization form');
+      await modal1.clickCreate();
+      await expect(modal1.dialog).not.toBeVisible({ timeout: 15_000 });
 
-      // Attempt to create a second program using the NFD-normalized form (visually identical)
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog2 = newProgramDialog(page);
-      await programNameField(dialog2).fill(nfdName);
-      await programDescriptionField(dialog2).fill('NFD form — should be treated as duplicate');
-      await dialog2.getByRole('button', { name: 'Create' }).click();
+      await programs.openNewProgram();
+      const modal2 = programs.newProgramModal;
+      await modal2.fillProgramName(nfdName);
+      await modal2.fillDescription('NFD form — should be treated as duplicate');
+      await modal2.clickCreate();
 
-      const duplicateBlocked = await dialog2
-        .getByText(/already exists|duplicate|name.*taken/i)
+      const duplicateBlocked = await modal2.duplicateError
         .isVisible({ timeout: 5_000 })
         .catch(() => false);
 
       if (duplicateBlocked) {
-        // Visually identical duplicate correctly blocked
-        await expect(dialog2).toBeVisible();
-        await expect(
-          dialog2.getByText(/already exists|duplicate|name.*taken/i),
-        ).toBeVisible();
+        await expect(modal2.dialog).toBeVisible();
+        await expect(modal2.duplicateError).toBeVisible();
       } else {
-        // Both accepted (app distinguishes by normalization form) — no user-visible confusion
-        await expect(dialog2).not.toBeVisible({ timeout: 15_000 });
-        const rows = page.getByRole('row', {
-          name: new RegExp(escapeRegExp(nfcName)),
-        });
+        await expect(modal2.dialog).not.toBeVisible({ timeout: 15_000 });
+        const rows = programs.programRow(nfcName);
         expect(await rows.count()).toBeGreaterThanOrEqual(1);
       }
     },
@@ -197,33 +131,29 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
   test(
     'TC-015: Internal multiple spaces are handled consistently for duplicate detection',
     async ({ page }) => {
-      await ensureBaseProgramExists(page);
+      const programs = new ProgramsPage(page);
+      const modal = programs.newProgramModal;
+
+      await programs.ensureProgramExists(BASE_PROGRAM_NAME, BASE_PROGRAM_DESC);
+      await expect(programs.programRow(BASE_PROGRAM_NAME).first()).toBeVisible({ timeout: 30_000 });
 
       const doubleSpacedName = BASE_PROGRAM_NAME.replace(/ /g, '  ');
 
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog = newProgramDialog(page);
-      await programNameField(dialog).fill(doubleSpacedName);
-      await programDescriptionField(dialog).fill('Internal-space duplicate detection test');
-      await dialog.getByRole('button', { name: 'Create' }).click();
+      await programs.openNewProgram();
+      await modal.fillProgramName(doubleSpacedName);
+      await modal.fillDescription('Internal-space duplicate detection test');
+      await modal.clickCreate();
 
-      const duplicateBlocked = await dialog
-        .getByText(/already exists|duplicate|name.*taken/i)
+      const duplicateBlocked = await modal.duplicateError
         .isVisible({ timeout: 5_000 })
         .catch(() => false);
 
       if (duplicateBlocked) {
-        // Internal whitespace is normalized for duplicate checks — visually identical name blocked
-        await expect(dialog).toBeVisible();
-        await expect(
-          dialog.getByText(/already exists|duplicate|name.*taken/i),
-        ).toBeVisible();
+        await expect(modal.dialog).toBeVisible();
+        await expect(modal.duplicateError).toBeVisible();
       } else {
-        // App treats it as a distinct name — both programs must be separately visible in the list
-        await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-        const rows = page.getByRole('row', {
-          name: new RegExp(escapeRegExp(BASE_PROGRAM_NAME), 'i'),
-        });
+        await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+        const rows = programs.programRow(BASE_PROGRAM_NAME);
         expect(await rows.count()).toBeGreaterThanOrEqual(1);
       }
     },
@@ -233,6 +163,8 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
     'TC-016: Script/HTML injection strings in Name are not executed and are handled safely',
     async ({ page }) => {
       const xssPayload = '<script>alert("xss")</script>';
+      const programs = new ProgramsPage(page);
+      const modal = programs.newProgramModal;
 
       let dialogFired = false;
       page.on('dialog', async (nativeDialog) => {
@@ -240,30 +172,23 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
         await nativeDialog.dismiss();
       });
 
-      await page.getByRole('button', { name: '+ New Program' }).click();
-      const dialog = newProgramDialog(page);
-      await programNameField(dialog).fill(xssPayload);
-      await programDescriptionField(dialog).fill('XSS injection safety test');
-      await dialog.getByRole('button', { name: 'Create' }).click();
+      await programs.openNewProgram();
+      await modal.fillProgramName(xssPayload);
+      await modal.fillDescription('XSS injection safety test');
+      await modal.clickCreate();
 
-      const modalStillOpen = await dialog.isVisible({ timeout: 10_000 }).catch(() => false);
+      const modalStillOpen = await modal.dialog.isVisible({ timeout: 10_000 }).catch(() => false);
 
       if (modalStillOpen) {
-        // Payload rejected — a validation or security error must be shown
-        await expect(
-          dialog.getByText(/invalid|not allowed|html|script|special characters/i),
-        ).toBeVisible();
+        await expect(modal.securityError()).toBeVisible();
       } else {
-        // Payload accepted — it must be stored and displayed as literal text, never executed
         await page.waitForTimeout(1_000);
         expect(
           dialogFired,
           'alert() must not have fired — XSS payload was not sanitised',
         ).toBe(false);
 
-        await expect(
-          page.getByRole('row', { name: new RegExp(escapeRegExp(xssPayload)) }).first(),
-        ).toBeVisible({ timeout: 10_000 });
+        await expect(programs.programRow(xssPayload).first()).toBeVisible({ timeout: 10_000 });
       }
     },
   );

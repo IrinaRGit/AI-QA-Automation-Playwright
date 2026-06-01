@@ -1,13 +1,6 @@
-import { expect, test } from '../../fixtures/cleanup.fixture';
-import {
-  PROGRAM_DESC,
-  closeDialogWithoutSaving,
-  createButton,
-  createProgram,
-  openNewProgramModal,
-  programNameField,
-  programRow,
-} from '../../fixtures/ds1-program.helpers';
+import { expect, test, waitForCreatedProgramId } from '../../fixtures/cleanup.fixture';
+import { PROGRAM_DESC } from '../../pages/programs.constants';
+import { ProgramsPage } from '../../pages/programs.page';
 
 test.describe('DS-1 — Create new academic program (Negative flows)', () => {
   test.setTimeout(60_000);
@@ -18,66 +11,82 @@ test.describe('DS-1 — Create new academic program (Negative flows)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await page.goto('/programs');
+    await new ProgramsPage(page).goto();
   });
 
   test('TC-007: Create button is disabled when program name is empty', async ({ page }) => {
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill('');
-    await programNameField(dialog).blur();
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    await expect(createButton(dialog)).toBeDisabled();
-    await expect(dialog).toBeVisible();
+    await programs.openNewProgram();
+    await modal.fillProgramName('');
+    await modal.blurProgramName();
+
+    await expect(modal.createButton).toBeDisabled();
+    await expect(modal.dialog).toBeVisible();
   });
 
   test('TC-008: Error is shown when a program name already exists', async ({ page, trackProgram }) => {
     const existingName = `Web Development 2026 ${Date.now()}`;
-    await createProgram(page, trackProgram, existingName, PROGRAM_DESC);
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(existingName);
-    await createButton(dialog).click();
+    await programs.openNewProgram();
+    await modal.fillProgramName(existingName);
+    await modal.fillDescription(PROGRAM_DESC);
+    const idPromise = waitForCreatedProgramId(page);
+    await modal.clickCreate();
+    trackProgram(await idPromise);
+    await expect(programs.programRow(existingName).first()).toBeVisible({ timeout: 30_000 });
 
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByText(/already exists|duplicate|name.*taken/i),
-    ).toBeVisible();
-    await expect(programRow(page, existingName)).toHaveCount(1);
+    await programs.openNewProgram();
+    await modal.fillProgramName(existingName);
+    await modal.clickCreate();
+
+    await expect(modal.dialog).toBeVisible();
+    await expect(modal.duplicateError).toBeVisible();
+    await expect(programs.programRow(existingName)).toHaveCount(1);
   });
 
   test('TC-009: Duplicate detection is case-insensitive', async ({ page, trackProgram }) => {
     const existingName = `Web Development 2026 ${Date.now()}`;
-    await createProgram(page, trackProgram, existingName, PROGRAM_DESC);
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(existingName.toLowerCase());
-    await createButton(dialog).click();
+    await programs.openNewProgram();
+    await modal.fillProgramName(existingName);
+    await modal.fillDescription(PROGRAM_DESC);
+    const idPromise = waitForCreatedProgramId(page);
+    await modal.clickCreate();
+    trackProgram(await idPromise);
+    await expect(programs.programRow(existingName).first()).toBeVisible({ timeout: 30_000 });
 
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByText(/already exists|duplicate|name.*taken/i),
-    ).toBeVisible();
-    await expect(programRow(page, existingName)).toHaveCount(1);
+    await programs.openNewProgram();
+    await modal.fillProgramName(existingName.toLowerCase());
+    await modal.clickCreate();
+
+    await expect(modal.dialog).toBeVisible();
+    await expect(modal.duplicateError).toBeVisible();
+    await expect(programs.programRow(existingName)).toHaveCount(1);
   });
 
   test('TC-010: Program name exceeding 255 characters is rejected', async ({ page }) => {
     const overMaxName = `${'A'.repeat(256)}${Date.now()}`;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(overMaxName);
-    const inputValue = await programNameField(dialog).inputValue();
+    await programs.openNewProgram();
+    await modal.fillProgramName(overMaxName);
+    const inputValue = await modal.programNameInput.inputValue();
 
     if (inputValue.length <= 255) {
       expect(inputValue.length).toBeLessThanOrEqual(255);
     }
 
-    await createButton(dialog).click();
+    await modal.clickCreate();
 
-    const modalStillOpen = await dialog.isVisible().catch(() => false);
-    const validationVisible = await dialog
-      .getByText(/max|maximum|too long|255|limit|characters/i)
-      .isVisible()
-      .catch(() => false);
+    const modalStillOpen = await modal.dialog.isVisible().catch(() => false);
+    const validationVisible = await modal.maxLengthError.isVisible().catch(() => false);
 
     expect(
       modalStillOpen || validationVisible || inputValue.length <= 255,
@@ -85,18 +94,20 @@ test.describe('DS-1 — Create new academic program (Negative flows)', () => {
     ).toBeTruthy();
 
     if (modalStillOpen) {
-      await closeDialogWithoutSaving(dialog);
+      await modal.dismissWithoutSaving();
     }
   });
 
   test('TC-011: Cancelling the form does not create a program', async ({ page }) => {
     const abandonedName = `Abandoned Program ${Date.now()}`;
+    const programs = new ProgramsPage(page);
+    const modal = programs.newProgramModal;
 
-    const dialog = await openNewProgramModal(page);
-    await programNameField(dialog).fill(abandonedName);
-    await closeDialogWithoutSaving(dialog);
+    await programs.openNewProgram();
+    await modal.fillProgramName(abandonedName);
+    await modal.dismissWithoutSaving();
 
-    await expect(dialog).not.toBeVisible({ timeout: 10_000 });
-    await expect(programRow(page, abandonedName)).toHaveCount(0);
+    await expect(modal.dialog).not.toBeVisible({ timeout: 10_000 });
+    await expect(programs.programRow(abandonedName)).toHaveCount(0);
   });
 });

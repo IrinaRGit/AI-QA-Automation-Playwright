@@ -1,58 +1,16 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-
-const BASE_PROGRAM_NAME = 'Web Development 2026';
-const BASE_PROGRAM_DESC =
-  'Full-stack curriculum covering HTML, CSS, JavaScript, React, Node.js, testing, and deployment.';
-
-// ── Locator helpers ────────────────────────────────────────────────────────────
-
-function newProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'New Program' });
-}
-
-function editProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: /Edit Program/i });
-}
-
-function programNameField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Program Name' });
-}
-
-function programDescriptionField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Description' });
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ── Data helpers ───────────────────────────────────────────────────────────────
+import { expect, test, type Page } from '@playwright/test';
+import { BASE_PROGRAM_DESC, BASE_PROGRAM_NAME } from '../../pages/programs.constants';
+import { ProgramsPage } from '../../pages/programs.page';
 
 async function createUniqueProgram(page: Page): Promise<string> {
   const name = `${BASE_PROGRAM_NAME} ${Date.now()}`;
+  const programs = new ProgramsPage(page);
 
-  await page.getByRole('button', { name: '+ New Program' }).click();
-  const dialog = newProgramDialog(page);
-  await dialog.getByRole('textbox', { name: 'Program Name' }).fill(name);
-  await dialog.getByRole('textbox', { name: 'Description' }).fill(BASE_PROGRAM_DESC);
-  await dialog.getByRole('button', { name: 'Create' }).click();
-
-  await expect(
-    page.getByRole('row', { name: new RegExp(escapeRegExp(name)) }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  await programs.createProgram(name, BASE_PROGRAM_DESC);
+  await expect(programs.programRow(name).first()).toBeVisible({ timeout: 30_000 });
 
   return name;
 }
-
-async function openEditModal(page: Page, programName: string): Promise<Locator> {
-  const row = page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first();
-  await row.getByRole('button', { name: '✏️' }).click();
-  const dialog = editProgramDialog(page);
-  await expect(dialog).toBeVisible({ timeout: 10_000 });
-  return dialog;
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 test.describe('DS-2 — Edit existing program details (Edge cases)', () => {
   test.setTimeout(60_000);
@@ -63,235 +21,223 @@ test.describe('DS-2 — Edit existing program details (Edge cases)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await page.goto('/programs');
+    await new ProgramsPage(page).goto();
   });
 
-  test('TC-021: Name supports common punctuation and symbols without breaking save or display', async ({ page }) => {
+  test('TC-021: Name supports common punctuation and symbols without breaking save or display', async ({
+    page,
+  }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const specialName = `${programName} (C#/.NET & JS)`;
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(specialName);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(specialName);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(specialName)) }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(specialName).first()).toBeVisible({ timeout: 15_000 });
 
-    // Re-open and confirm stored value matches exactly (no character corruption)
-    const reOpenedDialog = await openEditModal(page, specialName);
-    await expect(programNameField(reOpenedDialog)).toHaveValue(specialName);
+    await programs.openEditFor(specialName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(reOpenedModal.programNameInput).toHaveValue(specialName);
   });
 
   test('TC-022: Name supports non-English characters (Unicode)', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const unicodeName = `${programName} – Développement Web (東京)`;
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(unicodeName);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(unicodeName);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    // Unicode characters must render correctly — no replacement chars or truncation
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(unicodeName)) }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(unicodeName).first()).toBeVisible({ timeout: 15_000 });
 
-    // Re-open and confirm full Unicode value persisted
-    const reOpenedDialog = await openEditModal(page, unicodeName);
-    await expect(programNameField(reOpenedDialog)).toHaveValue(unicodeName);
+    await programs.openEditFor(unicodeName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(reOpenedModal.programNameInput).toHaveValue(unicodeName);
   });
 
   test('TC-023: Description supports multi-line text and preserves line breaks', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const multilineDesc =
       'Full-stack curriculum:\n- HTML/CSS\n- JavaScript\n- React\n- Node.js\n- Playwright E2E';
 
-    const dialog = await openEditModal(page, programName);
-    await programDescriptionField(dialog).fill(multilineDesc);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillDescription(multilineDesc);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
 
-    // Re-open and confirm line breaks and content are preserved
-    const reOpenedDialog = await openEditModal(page, programName);
-    const storedDesc = await programDescriptionField(reOpenedDialog).inputValue();
-    // Normalise \r\n vs \n for cross-platform comparison
+    await programs.openEditFor(programName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    const storedDesc = await reOpenedModal.descriptionInput.inputValue();
     expect(storedDesc.replace(/\r\n/g, '\n')).toBe(multilineDesc);
   });
 
   test('TC-024: Extremely long Description saves without truncation or UI lag', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const chunk = 'Full-stack curriculum updated. ';
     const longDesc = chunk.repeat(Math.ceil(5_000 / chunk.length)).slice(0, 5_000);
 
-    const dialog = await openEditModal(page, programName);
-    await programDescriptionField(dialog).fill(longDesc);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillDescription(longDesc);
+    await modal.clickSave();
 
-    // Two valid outcomes: save succeeds with full text, OR a clear max-length error is shown
-    const saveSucceeded = await dialog.isHidden({ timeout: 15_000 }).catch(() => false);
+    const saveSucceeded = await modal.dialog.isHidden({ timeout: 15_000 }).catch(() => false);
 
     if (saveSucceeded) {
-      // Full text must be persisted — no silent truncation
-      const reOpenedDialog = await openEditModal(page, programName);
-      const storedDesc = await programDescriptionField(reOpenedDialog).inputValue();
+      await programs.openEditFor(programName);
+      const reOpenedModal = programs.editProgramModal;
+      await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+      const storedDesc = await reOpenedModal.descriptionInput.inputValue();
       expect(storedDesc.length).toBe(longDesc.length);
     } else {
-      // Save blocked: an explicit max-length validation message must be visible
-      await expect(
-        dialog.getByText(/max|maximum|too long|limit|characters/i),
-      ).toBeVisible();
+      await expect(modal.maxLengthError).toBeVisible();
     }
   });
 
-  test('TC-025: Name enforces max-length at boundary (exactly max and max+1 characters)', async ({ page }) => {
-    // Assumed max length of 255; update if the product specifies a different value
+  test('TC-025: Name enforces max-length at boundary (exactly max and max+1 characters)', async ({
+    page,
+  }) => {
     const MAX_LENGTH = 255;
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const atMaxName = 'A'.repeat(MAX_LENGTH);
     const overMaxName = 'A'.repeat(MAX_LENGTH + 1);
 
-    // Boundary: exactly MAX_LENGTH characters — save must succeed
-    const dialog1 = await openEditModal(page, programName);
-    await programNameField(dialog1).fill(atMaxName);
-    await dialog1.getByRole('button', { name: 'Save' }).click();
-    await expect(dialog1).not.toBeVisible({ timeout: 15_000 });
-    const reOpenedDialog1 = await openEditModal(page, atMaxName);
-    await expect(programNameField(reOpenedDialog1)).toHaveValue(atMaxName);
-    // Close and reset for next boundary check
-    const cancelBtn = reOpenedDialog1.getByRole('button', { name: /^cancel$/i });
-    if (await cancelBtn.isVisible()) {
-      await cancelBtn.click();
-    } else {
-      await reOpenedDialog1.getByRole('button', { name: /close|×|✕/i }).click();
-    }
-    await expect(reOpenedDialog1).not.toBeVisible({ timeout: 10_000 });
+    await programs.openEditFor(programName);
+    const modal1 = programs.editProgramModal;
+    await expect(modal1.dialog).toBeVisible({ timeout: 10_000 });
+    await modal1.fillProgramName(atMaxName);
+    await modal1.clickSave();
+    await expect(modal1.dialog).not.toBeVisible({ timeout: 15_000 });
 
-    // Boundary: MAX_LENGTH + 1 characters — save must be blocked with a clear message
-    const dialog2 = await openEditModal(page, atMaxName);
-    await programNameField(dialog2).fill(overMaxName);
-    await dialog2.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(atMaxName);
+    const reOpenedModal1 = programs.editProgramModal;
+    await expect(reOpenedModal1.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(reOpenedModal1.programNameInput).toHaveValue(atMaxName);
+    await reOpenedModal1.dismissWithoutSaving();
+    await expect(reOpenedModal1.dialog).not.toBeVisible({ timeout: 10_000 });
 
-    // Either the input itself truncates to MAX_LENGTH, or save is blocked with a validation error
-    const modalStillOpen = await dialog2.isVisible().catch(() => false);
-    const inputValue = await programNameField(dialog2).inputValue();
+    await programs.openEditFor(atMaxName);
+    const modal2 = programs.editProgramModal;
+    await expect(modal2.dialog).toBeVisible({ timeout: 10_000 });
+    await modal2.fillProgramName(overMaxName);
+    await modal2.clickSave();
+
+    const modalStillOpen = await modal2.dialog.isVisible().catch(() => false);
+    const inputValue = await modal2.programNameInput.inputValue();
 
     if (modalStillOpen) {
-      // Save was blocked: explicit max-length error must be shown
-      await expect(
-        dialog2.getByText(/max|maximum|too long|limit|characters/i),
-      ).toBeVisible();
+      await expect(modal2.maxLengthError).toBeVisible();
     } else {
-      // Input was hard-capped by the field itself: stored value must not exceed MAX_LENGTH
-      const stored = await (async () => {
-        const d = await openEditModal(page, atMaxName);
-        return programNameField(d).inputValue();
-      })();
+      await programs.openEditFor(atMaxName);
+      const storedModal = programs.editProgramModal;
+      await expect(storedModal.dialog).toBeVisible({ timeout: 10_000 });
+      const stored = await storedModal.programNameInput.inputValue();
       expect(stored.length).toBeLessThanOrEqual(MAX_LENGTH);
     }
-    // Suppress unused variable warning
     void inputValue;
   });
 
-  test('TC-026: Name normalization prevents invisible duplicates (case and whitespace variations)', async ({ page }) => {
+  test('TC-026: Name normalization prevents invisible duplicates (case and whitespace variations)', async ({
+    page,
+  }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     await page.waitForTimeout(20);
     const secondProgram = await createUniqueProgram(page);
 
-    // Try to rename secondProgram to a case/space variant of the first
     const caseVariant = programName.toLowerCase();
-    const spaceVariant = programName.replace(/ /g, '  '); // double spaces
+    const spaceVariant = programName.replace(/ /g, '  ');
 
     for (const variant of [caseVariant, spaceVariant]) {
-      const dialog = await openEditModal(page, secondProgram);
-      await programNameField(dialog).fill(variant);
-      await dialog.getByRole('button', { name: 'Save' }).click();
+      await programs.openEditFor(secondProgram);
+      const modal = programs.editProgramModal;
+      await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+      await modal.fillProgramName(variant);
+      await modal.clickSave();
 
-      // Two valid outcomes: rejected (uniqueness enforced) OR saved with consistent display
-      const modalStillOpen = await dialog.isVisible().catch(() => false);
+      const modalStillOpen = await modal.dialog.isVisible().catch(() => false);
 
       if (modalStillOpen) {
-        // Uniqueness enforced — a duplicate/conflict message must be shown
-        await expect(
-          dialog.getByText(/already exists|duplicate|name.*taken/i),
-        ).toBeVisible();
-        // Cancel to reset state
-        const cancelBtn = dialog.getByRole('button', { name: /^cancel$/i });
-        if (await cancelBtn.isVisible()) {
-          await cancelBtn.click();
-        } else {
-          await dialog.getByRole('button', { name: /close|×|✕/i }).click();
-        }
-        await expect(dialog).not.toBeVisible({ timeout: 10_000 });
+        await expect(modal.duplicateError).toBeVisible();
+        await modal.dismissWithoutSaving();
+        await expect(modal.dialog).not.toBeVisible({ timeout: 10_000 });
       } else {
-        // Save succeeded — both programs must show distinct, user-readable names (no invisible duplicates)
-        const rows = page.getByRole('row', { name: new RegExp(escapeRegExp(programName), 'i') });
+        const rows = programs.programRow(programName);
         const count = await rows.count();
-        // At most one row should visually match the base name (no invisible duplicates confusing users)
         expect(count).toBeLessThanOrEqual(2);
       }
     }
   });
 
-  test('TC-027: HTML/JS injection strings in Description are not executed and are safely rendered', async ({ page }) => {
+  test('TC-027: HTML/JS injection strings in Description are not executed and are safely rendered', async ({
+    page,
+  }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const xssPayload = '<script>alert("xss")</script>';
 
-    // Detect if a native alert/dialog fires — it must not
     let dialogFired = false;
     page.on('dialog', async (nativeDialog) => {
       dialogFired = true;
       await nativeDialog.dismiss();
     });
 
-    const dialog = await openEditModal(page, programName);
-    await programDescriptionField(dialog).fill(xssPayload);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillDescription(xssPayload);
+    await modal.clickSave();
 
-    // Two valid outcomes: save blocked with a validation error, OR saved with the payload escaped
-    const modalStillOpen = await dialog.isVisible({ timeout: 10_000 }).catch(() => false);
+    const modalStillOpen = await modal.dialog.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (modalStillOpen) {
-      // Rejected: an appropriate validation/security error must be shown
-      await expect(
-        dialog.getByText(/invalid|not allowed|html|script/i),
-      ).toBeVisible();
+      await expect(modal.securityError()).toBeVisible();
     } else {
-      // Accepted: must be stored/displayed as literal text — never executed
-      await page.waitForTimeout(1_000); // allow time for any deferred script execution
+      await page.waitForTimeout(1_000);
       expect(dialogFired, 'alert() must not have executed — XSS payload was not sanitised').toBe(false);
 
-      // Re-open and verify the payload is stored as plain text
-      const reOpenedDialog = await openEditModal(page, programName);
-      const storedDesc = await programDescriptionField(reOpenedDialog).inputValue();
+      await programs.openEditFor(programName);
+      const reOpenedModal = programs.editProgramModal;
+      await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+      const storedDesc = await reOpenedModal.descriptionInput.inputValue();
       expect(storedDesc).toContain('alert("xss")');
     }
   });
 
-  test('TC-028: Rapid double-click on Save does not create inconsistent state or duplicate rows', async ({ page }) => {
+  test('TC-028: Rapid double-click on Save does not create inconsistent state or duplicate rows', async ({
+    page,
+  }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const updatedName = `${programName} - Updated`;
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(updatedName);
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(updatedName);
+    await modal.doubleClickSave();
 
-    const saveButton = dialog.getByRole('button', { name: 'Save' });
-
-    // Double-click Save in quick succession
-    await saveButton.click();
-    await saveButton.click({ force: true }); // force past any brief disable state
-
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-
-    // Exactly one row must exist for the updated name — no duplicate created
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(updatedName)) }),
-    ).toHaveCount(1);
-    // Original name row must be gone
-    await expect(
-      page.getByRole('row', { name: new RegExp(`^${escapeRegExp(programName)}$`) }),
-    ).toHaveCount(0);
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(updatedName)).toHaveCount(1);
+    await expect(programs.programRowExact(programName)).toHaveCount(0);
   });
 });

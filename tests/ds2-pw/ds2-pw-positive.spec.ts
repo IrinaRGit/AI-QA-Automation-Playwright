@@ -1,84 +1,20 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import {
+  BASE_PROGRAM_DESC,
+  BASE_PROGRAM_NAME,
+  UPDATED_DESC,
+} from '../../pages/programs.constants';
+import { ProgramsPage } from '../../pages/programs.page';
 
-const BASE_PROGRAM_NAME = 'Web Development 2026';
-const BASE_PROGRAM_DESC =
-  'Full-stack curriculum covering HTML, CSS, JavaScript, React, Node.js, testing, and deployment.';
-const UPDATED_DESC =
-  'Full-stack curriculum updated to include Playwright end-to-end automation and CI best practices.';
-
-// ── Locator helpers ────────────────────────────────────────────────────────────
-
-function newProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'New Program' });
-}
-
-function editProgramDialog(page: Page) {
-  return page.getByRole('dialog', { name: /Edit Program/i });
-}
-
-function programNameField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Program Name' });
-}
-
-function programDescriptionField(dialog: Locator) {
-  return dialog.getByRole('textbox', { name: 'Description' });
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ── Data helpers ───────────────────────────────────────────────────────────────
-
-/**
- * Creates a program with a unique name to keep tests isolated.
- * Returns the generated program name so the caller can reference it.
- */
 async function createUniqueProgram(page: Page): Promise<string> {
   const name = `${BASE_PROGRAM_NAME} ${Date.now()}`;
+  const programs = new ProgramsPage(page);
 
-  await page.getByRole('button', { name: '+ New Program' }).click();
-  const dialog = newProgramDialog(page);
-  await dialog.getByRole('textbox', { name: 'Program Name' }).fill(name);
-  await dialog.getByRole('textbox', { name: 'Description' }).fill(BASE_PROGRAM_DESC);
-  await dialog.getByRole('button', { name: 'Create' }).click();
-
-  await expect(
-    page.getByRole('row', { name: new RegExp(escapeRegExp(name)) }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  await programs.createProgram(name, BASE_PROGRAM_DESC);
+  await expect(programs.programRow(name).first()).toBeVisible({ timeout: 30_000 });
 
   return name;
 }
-
-/**
- * Ensures the canonical fixture program exists.
- * Used only by TC-001 which asserts known field values.
- */
-async function ensureBaseProgramExists(page: Page) {
-  const row = page.getByRole('row', { name: new RegExp(escapeRegExp(BASE_PROGRAM_NAME)) }).first();
-  if ((await row.count()) > 0 && (await row.isVisible())) return;
-
-  await page.getByRole('button', { name: '+ New Program' }).click();
-  const dialog = newProgramDialog(page);
-  await dialog.getByRole('textbox', { name: 'Program Name' }).fill(BASE_PROGRAM_NAME);
-  await dialog.getByRole('textbox', { name: 'Description' }).fill(BASE_PROGRAM_DESC);
-  await dialog.getByRole('button', { name: 'Create' }).click();
-
-  await expect(
-    page.getByRole('row', { name: new RegExp(escapeRegExp(BASE_PROGRAM_NAME)) }).first(),
-  ).toBeVisible({ timeout: 30_000 });
-}
-
-/** Opens the Edit Program modal for the given program row and returns the dialog locator. */
-async function openEditModal(page: Page, programName: string): Promise<Locator> {
-  const row = page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first();
-  await row.getByRole('button', { name: '✏️' }).click();
-  const dialog = editProgramDialog(page);
-  await expect(dialog).toBeVisible({ timeout: 10_000 });
-  return dialog;
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 test.describe('DS-2 — Edit existing program details (Positive flows)', () => {
   test.setTimeout(60_000);
@@ -89,118 +25,118 @@ test.describe('DS-2 — Edit existing program details (Positive flows)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await page.goto('/programs');
+    await new ProgramsPage(page).goto();
   });
 
   test('TC-001: Edit form opens pre-populated with the program\'s current data', async ({ page }) => {
-    await ensureBaseProgramExists(page);
+    const programs = new ProgramsPage(page);
 
-    const dialog = await openEditModal(page, BASE_PROGRAM_NAME);
+    await programs.ensureProgramExists(BASE_PROGRAM_NAME, BASE_PROGRAM_DESC);
+    await expect(programs.programRow(BASE_PROGRAM_NAME).first()).toBeVisible({ timeout: 30_000 });
 
-    await expect(programNameField(dialog)).toHaveValue(BASE_PROGRAM_NAME);
-    await expect(programDescriptionField(dialog)).toHaveValue(BASE_PROGRAM_DESC);
+    await programs.openEditFor(BASE_PROGRAM_NAME);
+
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(modal.programNameInput).toHaveValue(BASE_PROGRAM_NAME);
+    await expect(modal.descriptionInput).toHaveValue(BASE_PROGRAM_DESC);
   });
 
   test('TC-002: Program name can be updated and reflected immediately in the list', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const originalName = await createUniqueProgram(page);
     const updatedName = `${originalName} - Updated`;
 
-    const dialog = await openEditModal(page, originalName);
-    await programNameField(dialog).fill(updatedName);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(originalName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(updatedName);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(updatedName)) }).first(),
-    ).toBeVisible({ timeout: 15_000 });
-    // Original name row must be gone — no duplicate created
-    await expect(
-      page.getByRole('row', { name: new RegExp(`^${escapeRegExp(originalName)}$`) }),
-    ).toHaveCount(0);
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(updatedName).first()).toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRowExact(originalName)).toHaveCount(0);
   });
 
   test('TC-003: Updating only Description preserves Name and other fields', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
 
-    const dialog = await openEditModal(page, programName);
-    await programDescriptionField(dialog).fill(UPDATED_DESC);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillDescription(UPDATED_DESC);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(programName).first()).toBeVisible();
 
-    // Re-open and confirm Name is unchanged, Description is updated
-    const reOpenedDialog = await openEditModal(page, programName);
-    await expect(programNameField(reOpenedDialog)).toHaveValue(programName);
-    await expect(programDescriptionField(reOpenedDialog)).toHaveValue(UPDATED_DESC);
+    await programs.openEditFor(programName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(reOpenedModal.programNameInput).toHaveValue(programName);
+    await expect(reOpenedModal.descriptionInput).toHaveValue(UPDATED_DESC);
   });
 
   test('TC-004: Save is idempotent when no changes are made', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
 
-    const dialog = await openEditModal(page, programName);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(programName).first()).toBeVisible();
 
-    // Re-open and confirm all values are unchanged
-    const reOpenedDialog = await openEditModal(page, programName);
-    await expect(programNameField(reOpenedDialog)).toHaveValue(programName);
-    await expect(programDescriptionField(reOpenedDialog)).toHaveValue(BASE_PROGRAM_DESC);
+    await programs.openEditFor(programName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(reOpenedModal.programNameInput).toHaveValue(programName);
+    await expect(reOpenedModal.descriptionInput).toHaveValue(BASE_PROGRAM_DESC);
   });
 
   test('TC-005: Cancel closes the modal without persisting edits', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const draftName = `${programName} - Draft`;
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(draftName);
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(draftName);
+    await modal.dismissWithoutSaving();
 
-    // Use Cancel button if available, otherwise fall back to the X close control
-    const cancelButton = dialog.getByRole('button', { name: /^cancel$/i });
-    if (await cancelButton.isVisible()) {
-      await cancelButton.click();
-    } else {
-      await dialog.getByRole('button', { name: /close|×|✕/i }).click();
-    }
+    await expect(modal.dialog).not.toBeVisible({ timeout: 10_000 });
+    await expect(programs.programRow(programName).first()).toBeVisible();
+    await expect(programs.programRow(draftName)).toHaveCount(0);
 
-    await expect(dialog).not.toBeVisible({ timeout: 10_000 });
-    // Original name still visible in the list — draft was not saved
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(programName)) }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(draftName)) }),
-    ).toHaveCount(0);
-
-    // Re-open and confirm the stored Name is still the original
-    const reOpenedDialog = await openEditModal(page, programName);
-    await expect(programNameField(reOpenedDialog)).toHaveValue(programName);
+    await programs.openEditFor(programName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    await expect(reOpenedModal.programNameInput).toHaveValue(programName);
   });
 
   test('TC-006: Leading/trailing spaces in Name are handled consistently on save', async ({ page }) => {
+    const programs = new ProgramsPage(page);
     const programName = await createUniqueProgram(page);
     const nameWithSpaces = `  ${programName} - Spaced  `;
     const trimmedName = nameWithSpaces.trim();
 
-    const dialog = await openEditModal(page, programName);
-    await programNameField(dialog).fill(nameWithSpaces);
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await programs.openEditFor(programName);
+    const modal = programs.editProgramModal;
+    await expect(modal.dialog).toBeVisible({ timeout: 10_000 });
+    await modal.fillProgramName(nameWithSpaces);
+    await modal.clickSave();
 
-    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
-    // List must show the trimmed (user-friendly) name
-    await expect(
-      page.getByRole('row', { name: new RegExp(escapeRegExp(trimmedName)) }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(modal.dialog).not.toBeVisible({ timeout: 15_000 });
+    await expect(programs.programRow(trimmedName).first()).toBeVisible({ timeout: 15_000 });
 
-    // Re-open and confirm stored value has no hidden leading/trailing whitespace
-    const reOpenedDialog = await openEditModal(page, trimmedName);
-    const storedName = await programNameField(reOpenedDialog).inputValue();
+    await programs.openEditFor(trimmedName);
+    const reOpenedModal = programs.editProgramModal;
+    await expect(reOpenedModal.dialog).toBeVisible({ timeout: 10_000 });
+    const storedName = await reOpenedModal.programNameInput.inputValue();
     expect(storedName.trim()).toBe(trimmedName);
     expect(storedName).toBe(storedName.trim());
   });
