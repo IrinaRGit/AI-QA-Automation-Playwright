@@ -1,5 +1,6 @@
 import { config } from 'dotenv';
 import { defineConfig, devices } from '@playwright/test';
+import { AUTH_STORAGE_PATH } from './fixtures/auth.constants';
 
 // Load `.env` from the project working directory (package root when using npm scripts).
 config();
@@ -12,7 +13,7 @@ export default defineConfig({
     DIDAXIS_API_TOKEN: process.env.DIDAXIS_API_TOKEN ?? '',
   },
   testDir: './tests',
-  testMatch: ['**/*.spec.ts', '**/*.ts'],
+  testMatch: '**/*.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -23,8 +24,16 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    //{ name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    //{ name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: AUTH_STORAGE_PATH,
+      },
+      dependencies: ['setup'],
+    },
+    //{ name: 'firefox', use: { ...devices['Desktop Firefox'] }, dependencies: ['setup'] },
+    //{ name: 'webkit', use: { ...devices['Desktop Safari'] }, dependencies: ['setup'] },
   ],
 });

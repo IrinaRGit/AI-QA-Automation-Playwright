@@ -4,7 +4,6 @@ import {
   closeDialogWithoutSaving,
   createButton,
   createProgram,
-  login,
   openNewProgramModal,
   programNameField,
   programRow,
@@ -19,7 +18,6 @@ test.describe('DS-1 — Create new academic program (Negative flows)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await login(page);
     await page.goto('/programs');
   });
 

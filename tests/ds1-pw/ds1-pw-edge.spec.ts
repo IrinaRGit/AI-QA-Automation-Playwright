@@ -2,7 +2,6 @@ import { expect, test, waitForCreatedProgramId } from '../../fixtures/cleanup.fi
 import {
   createButton,
   createProgram,
-  login,
   openNewProgramModal,
   programNameField,
   programRow,
@@ -20,7 +19,6 @@ test.describe('DS-1 — Create new academic program (Edge cases)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await login(page);
     await page.goto('/programs');
   });
 

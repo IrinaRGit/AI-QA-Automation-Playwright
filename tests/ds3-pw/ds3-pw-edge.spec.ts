@@ -25,35 +25,6 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// ── Auth ───────────────────────────────────────────────────────────────────────
-
-async function login(page: Page) {
-  if (!process.env.DIDAXIS_URL) {
-    throw new Error('Set DIDAXIS_URL in .env (e.g. https://test.didaxis.studio)');
-  }
-  const email = process.env.DIDAXIS_EMAIL;
-  const password = process.env.DIDAXIS_PASSWORD;
-  if (!email || !password) {
-    throw new Error('Set DIDAXIS_EMAIL and DIDAXIS_PASSWORD in .env');
-  }
-
-  await page.goto('/login');
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
-
-  try {
-    await expect(page).not.toHaveURL(/\/login\b/, { timeout: 30_000 });
-  } catch {
-    if (await page.getByText(/Invalid email or password/i).isVisible().catch(() => false)) {
-      throw new Error(
-        'Login failed: invalid credentials. Check DIDAXIS_EMAIL / DIDAXIS_PASSWORD in .env.',
-      );
-    }
-    throw new Error('Login failed: still on /login after 30 s (check network or account state).');
-  }
-}
-
 // ── Data helpers ───────────────────────────────────────────────────────────────
 
 async function ensureBaseProgramExists(page: Page) {
@@ -84,7 +55,6 @@ test.describe('DS-3 — Program name validation and duplicate prevention (Edge c
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await login(page);
     await page.goto('/programs');
   });
 

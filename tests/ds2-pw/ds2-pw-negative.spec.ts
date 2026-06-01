@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { AUTH_STORAGE_PATH } from '../../fixtures/auth.constants';
 
 const BASE_PROGRAM_NAME = 'Web Development 2026';
 const BASE_PROGRAM_DESC =
@@ -24,33 +25,6 @@ function programDescriptionField(dialog: Locator) {
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ── Auth ───────────────────────────────────────────────────────────────────────
-
-async function login(page: Page) {
-  if (!process.env.DIDAXIS_URL) {
-    throw new Error('Set DIDAXIS_URL in .env (e.g. https://test.didaxis.studio)');
-  }
-  const email = process.env.DIDAXIS_EMAIL;
-  const password = process.env.DIDAXIS_PASSWORD;
-  if (!email || !password) {
-    throw new Error('Set DIDAXIS_EMAIL and DIDAXIS_PASSWORD in .env');
-  }
-
-  await page.goto('/login');
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
-
-  try {
-    await expect(page).not.toHaveURL(/\/login\b/, { timeout: 30_000 });
-  } catch {
-    if (await page.getByText(/Invalid email or password/i).isVisible().catch(() => false)) {
-      throw new Error('Login failed: invalid credentials. Check DIDAXIS_EMAIL / DIDAXIS_PASSWORD in .env.');
-    }
-    throw new Error('Login failed: still on /login after 30 s (check network or account state).');
-  }
 }
 
 // ── Data helpers ───────────────────────────────────────────────────────────────
@@ -90,7 +64,6 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
       !process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD,
       'Set DIDAXIS credentials in .env',
     );
-    await login(page);
     await page.goto('/programs');
   });
 
@@ -226,13 +199,18 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
 
   test('TC-017: Concurrent modification is handled without silently overwriting the other session', async ({ browser }) => {
     // Each session gets its own isolated browser context
-    const context1 = await browser.newContext({ baseURL: process.env.DIDAXIS_URL });
-    const context2 = await browser.newContext({ baseURL: process.env.DIDAXIS_URL });
+    const context1 = await browser.newContext({
+      baseURL: process.env.DIDAXIS_URL,
+      storageState: AUTH_STORAGE_PATH,
+    });
+    const context2 = await browser.newContext({
+      baseURL: process.env.DIDAXIS_URL,
+      storageState: AUTH_STORAGE_PATH,
+    });
     const page1 = await context1.newPage();
     const page2 = await context2.newPage();
 
     try {
-      await login(page1);
       await page1.goto('/programs');
       const programName = await createUniqueProgram(page1);
 
@@ -241,7 +219,6 @@ test.describe('DS-2 — Edit existing program details (Negative flows)', () => {
       await programDescriptionField(dialog1).fill('Local edit after concurrent update.');
 
       // Session 2: update the same program's name first
-      await login(page2);
       await page2.goto('/programs');
       const dialog2 = await openEditModal(page2, programName);
       const concurrentName = `${programName} - Updated by Admin`;

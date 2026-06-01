@@ -30,34 +30,6 @@ async function fillNewProgramForm(dialog: Locator, name: string, description: st
   await programDescriptionField(dialog).fill(description);
 }
 
-async function login(page: Page) {
-  if (!process.env.DIDAXIS_URL) {
-    throw new Error('Set DIDAXIS_URL in .env (e.g. https://test.didaxis.studio)');
-  }
-  const email = process.env.DIDAXIS_EMAIL;
-  const password = process.env.DIDAXIS_PASSWORD;
-  if (!email || !password) {
-    throw new Error('Set DIDAXIS_EMAIL and DIDAXIS_PASSWORD in .env');
-  }
-
-  await page.goto('/login');
-  await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
-
-  const invalidCreds = page.getByText(/Invalid email or password/i);
-  try {
-    await expect(page).not.toHaveURL(/\/login\b/, { timeout: 30_000 });
-  } catch {
-    if (await invalidCreds.isVisible().catch(() => false)) {
-      throw new Error(
-        'Login failed: invalid email or password. Set DIDAXIS_EMAIL and DIDAXIS_PASSWORD in .env to match test.didaxis.studio.',
-      );
-    }
-    throw new Error('Login failed: still on /login after 30s (check network or account state).');
-  }
-}
-
 async function ensureProgramExists(page: Page) {
   const row = page.getByRole('row', { name: new RegExp(PROGRAM_NAME) }).first();
   if ((await row.count()) > 0 && (await row.isVisible())) {
@@ -79,7 +51,6 @@ test.describe('Didaxis Studio — programs', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!process.env.DIDAXIS_URL, 'Set DIDAXIS_URL in .env');
     test.skip(!process.env.DIDAXIS_EMAIL || !process.env.DIDAXIS_PASSWORD, 'Set DIDAXIS credentials in .env');
-    await login(page);
     await page.goto('/programs');
   });
 
