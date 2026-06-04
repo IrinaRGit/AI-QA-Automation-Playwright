@@ -8,17 +8,33 @@ jobs:
     name: Run Playwright
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    environment: dev1
 
     env:
       CI: true
-      DIDAXIS_URL: ${{ secrets.DIDAXIS_URL }}
-      DIDAXIS_EMAIL: ${{ secrets.DIDAXIS_EMAIL }}
-      DIDAXIS_PASSWORD: ${{ secrets.DIDAXIS_PASSWORD }}
-      DIDAXIS_API_TOKEN: ${{ secrets.DIDAXIS_API_TOKEN }}
+      # Use repository secrets; fall back to repository variables if names match .env
+      DIDAXIS_URL: ${{ secrets.DIDAXIS_URL || vars.DIDAXIS_URL }}
+      DIDAXIS_EMAIL: ${{ secrets.DIDAXIS_EMAIL || vars.DIDAXIS_EMAIL }}
+      DIDAXIS_PASSWORD: ${{ secrets.DIDAXIS_PASSWORD || vars.DIDAXIS_PASSWORD }}
+      DIDAXIS_API_TOKEN: ${{ secrets.DIDAXIS_API_TOKEN || vars.DIDAXIS_API_TOKEN }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify Didaxis configuration
+        shell: bash
+        run: |
+          missing=()
+          for name in DIDAXIS_URL DIDAXIS_EMAIL DIDAXIS_PASSWORD DIDAXIS_API_TOKEN; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing: ${missing[*]}. Add them under Settings → Secrets and variables → Actions (Secrets recommended for passwords/tokens)."
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
