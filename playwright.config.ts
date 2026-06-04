@@ -27,11 +27,17 @@ export default defineConfig({
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
+      testIgnore: /todomvc\//,
       use: {
         ...devices['Desktop Chrome'],
         storageState: AUTH_STORAGE_PATH,
       },
       dependencies: ['setup'],
+    },
+    {
+      name: 'chromium-todomvc',
+      testMatch: /todomvc\/.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
     },
     //{ name: 'firefox', use: { ...devices['Desktop Firefox'] }, dependencies: ['setup'] },
     //{ name: 'webkit', use: { ...devices['Desktop Safari'] }, dependencies: ['setup'] },

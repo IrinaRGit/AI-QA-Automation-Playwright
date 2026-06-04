@@ -32,7 +32,7 @@ jobs:
             fi
           done
           if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error::Missing: ${missing[*]}. Add them under Settings → Secrets and variables → Actions (Secrets recommended for passwords/tokens)."
+            echo "::error::Missing: ${missing[*]}. Add them to the dev1 environment (or repo secrets) under Settings → Secrets and variables → Actions."
             exit 1
           fi
 
