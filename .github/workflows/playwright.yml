@@ -51,7 +51,7 @@ jobs:
 
       # Smoke: auth setup + one read-only Didaxis test (restore `npm test` for full suite)
       - name: Run Playwright smoke test
-        run: npx playwright test tests/ds1-pw/ds1-pw-positive.spec.ts --grep "TC-001: Navigate" --project=chromium
+        run: npx playwright test tests/ds1-pw/ds1-pw-positive.spec.ts --grep 'TC-001: Navigate' --project=chromium
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
