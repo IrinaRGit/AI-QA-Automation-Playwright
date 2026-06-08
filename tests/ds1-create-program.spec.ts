@@ -1,5 +1,4 @@
 import { expect, test, waitForCreatedProgramId } from '../fixtures/cleanup.fixture';
-import { BASE_PROGRAM_DESC, BASE_PROGRAM_NAME } from '../pages/programs.constants';
 import { ProgramsPage } from '../pages/programs.page';
 
 test.describe('Didaxis Studio — programs', () => {
@@ -28,17 +27,27 @@ test.describe('Didaxis Studio — programs', () => {
     await expect(programs.programRow(uniqueName).first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test('TC-001: Edit form opens pre-populated with the program’s current data', async ({ page }) => {
+  test('TC-001: Edit form opens pre-populated with the program’s current data', async ({ page, trackProgram }) => {
+    const uniqueName = `QA Edit Program ${Date.now()}`;
+    const uniqueDescription = `Pre-populated edit check created at ${Date.now()}.`;
     const programs = new ProgramsPage(page);
+    const newModal = programs.newProgramModal;
 
-    await programs.ensureProgramExists(BASE_PROGRAM_NAME, BASE_PROGRAM_DESC);
-    await expect(programs.programRow(BASE_PROGRAM_NAME).first()).toBeVisible({ timeout: 30_000 });
+    await programs.openNewProgram();
+    await newModal.fillProgramName(uniqueName);
+    await newModal.fillDescription(uniqueDescription);
 
-    await programs.openEditFor(BASE_PROGRAM_NAME);
+    const idPromise = waitForCreatedProgramId(page);
+    await newModal.clickCreate();
+    trackProgram(await idPromise);
+
+    await expect(programs.programRow(uniqueName).first()).toBeVisible({ timeout: 30_000 });
+
+    await programs.openEditFor(uniqueName);
 
     const modal = programs.editProgramModal;
     await expect(modal.heading).toBeVisible();
-    await expect(modal.programNameInput).toHaveValue(BASE_PROGRAM_NAME);
-    await expect(modal.descriptionInput).toHaveValue(BASE_PROGRAM_DESC);
+    await expect(modal.programNameInput).toHaveValue(uniqueName);
+    await expect(modal.descriptionInput).toHaveValue(uniqueDescription);
   });
 });
