@@ -50,42 +50,55 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright ds1 create program test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds1-create-program.spec.ts --project=chromium
 
       - name: Run Playwright ds1-pw positive test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds1-pw/ds1-pw-positive.spec.ts --project=chromium
 
       - name: Run Playwright ds1-pw negative test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds1-pw/ds1-pw-negative.spec.ts --project=chromium
 
       - name: Run Playwright ds1-pw edge test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds1-pw/ds1-pw-edge.spec.ts --project=chromium
 
       - name: Run Playwright ds2-pw positive test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds2-pw/ds2-pw-positive.spec.ts --project=chromium
 
       - name: Run Playwright ds2-pw negative test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds2-pw/ds2-pw-negative.spec.ts --project=chromium
 
       - name: Run Playwright ds2-pw edge test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds2-pw/ds2-pw-edge.spec.ts --project=chromium
 
       - name: Run Playwright ds3-pw positive test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds3-pw/ds3-pw-positive.spec.ts --project=chromium
 
       - name: Run Playwright ds3-pw negative test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds3-pw/ds3-pw-negative.spec.ts --project=chromium
 
       - name: Run Playwright ds3-pw edge test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/ds3-pw/ds3-pw-edge.spec.ts --project=chromium
 
       - name: Run Playwright todomvc positive test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/todomvc/positive.spec.ts --project=chromium-todomvc
 
       - name: Run Playwright todomvc negative test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/todomvc/negative.spec.ts --project=chromium-todomvc
 
       - name: Run Playwright todomvc edge test
+        if: ${{ !cancelled() }}
         run: npx playwright test tests/todomvc/edge.spec.ts --project=chromium-todomvc
 
       - name: Upload Playwright report
