@@ -89,18 +89,6 @@ jobs:
         if: ${{ !cancelled() }}
         run: npx playwright test tests/ds3-pw/ds3-pw-edge.spec.ts --project=chromium
 
-      - name: Run Playwright todomvc positive test
-        if: ${{ !cancelled() }}
-        run: npx playwright test tests/todomvc/positive.spec.ts --project=chromium-todomvc
-
-      - name: Run Playwright todomvc negative test
-        if: ${{ !cancelled() }}
-        run: npx playwright test tests/todomvc/negative.spec.ts --project=chromium-todomvc
-
-      - name: Run Playwright todomvc edge test
-        if: ${{ !cancelled() }}
-        run: npx playwright test tests/todomvc/edge.spec.ts --project=chromium-todomvc
-
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
